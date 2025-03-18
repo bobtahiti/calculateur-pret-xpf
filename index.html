@@ -1,1 +1,309 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculateur de Prêt en XPF</title>
+    <script src="https://unpkg.com/mathjs@14.3.1/lib/browser/math.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #ffffff;
+        }
+        .calculator {
+            max-width: 420px;
+            margin: 0 auto;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 5px;
+        }
+        .header {
+            background-color: #337ea9;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+            font-weight: bold;
+        }
+        .inputs {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 10px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .input-group label {
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: bold;
+        }
+        .input-group input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .results {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+        }
+        .result-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .result-label {
+            font-size: 12px;
+            color: #777;
+        }
+        .result-value {
+            font-weight: bold;
+            color: #337ea9;
+        }
+        button {
+            background-color: #337ea9;
+            color: white;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #2a6a8f;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 5px;
+            text-align: right;
+        }
+        th {
+            background-color: #f0f5f8;
+            font-weight: bold;
+            text-align: center;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .table-container {
+            max-height: 250px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        .footer {
+            text-align: center;
+            font-size: 11px;
+            color: #777;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator">
+        <div class="header">Calcul de Prêt - XPF</div>
+        
+        <div class="inputs">
+            <div class="input-group">
+                <label>Montant (XPF)</label>
+                <input type="text" id="montant" value="5 000 000">
+            </div>
+            <div class="input-group">
+                <label>Taux (%)</label>
+                <input type="text" id="taux" value="3,5">
+            </div>
+            <div class="input-group">
+                <label>Durée (ans)</label>
+                <input type="text" id="duree" value="15">
+            </div>
+        </div>
+        
+        <div class="results">
+            <div class="result-group">
+                <div class="result-label">Mensualité</div>
+                <div class="result-value" id="mensualite">0 XPF</div>
+            </div>
+            <div class="result-group">
+                <div class="result-label">Coût total</div>
+                <div class="result-value" id="cout-total">0 XPF</div>
+            </div>
+            <div class="result-group">
+                <div class="result-label">Total intérêts</div>
+                <div class="result-value" id="interets-total">0 XPF</div>
+            </div>
+        </div>
+        
+        <button id="toggle-amortissement">Voir le tableau d'amortissement</button>
+        
+        <div id="amortissement-container" style="display: none;">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Mois</th>
+                            <th>Mensualité</th>
+                            <th>Intérêts</th>
+                            <th>Capital</th>
+                            <th>Restant dû</th>
+                        </tr>
+                    </thead>
+                    <tbody id="amortissement-body"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="footer">Calculateur de prêt en XPF pour Notion</div>
+    </div>
 
+    <script>
+        // Formater les nombres avec séparation des milliers et devise XPF
+        function formatMontant(valeur) {
+            return valeur.toLocaleString('fr-FR').replace(/,/g, ' ') + ' XPF';
+        }
+        
+        // Formater les nombres avec séparation des milliers pour l'affichage dans les champs
+        function formatNombre(valeur) {
+            return valeur.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+        }
+        
+        // Convertir une chaîne avec séparateurs en nombre
+        function parseNombreAvecSeparateurs(valeur) {
+            if (!valeur) return 0;
+            return Number(valeur.replace(/\s+/g, '').replace(',', '.'));
+        }
+
+        // Calculer les mensualités et autres valeurs
+        function calculerMensualite() {
+            const montant = parseNombreAvecSeparateurs(document.getElementById('montant').value);
+            const taux = parseNombreAvecSeparateurs(document.getElementById('taux').value);
+            const duree = parseNombreAvecSeparateurs(document.getElementById('duree').value);
+            
+            // Taux mensuel (taux annuel divisé par 12 et en décimal)
+            const tauxMensuel = taux / 100 / 12;
+            
+            // Durée en mois
+            const dureeMois = duree * 12;
+            
+            // Calcul de la mensualité
+            const mensualiteCalculee = montant * (tauxMensuel * Math.pow(1 + tauxMensuel, dureeMois)) / (Math.pow(1 + tauxMensuel, dureeMois) - 1);
+            
+            // Coût total = mensualité * nombre de mois
+            const coutTotalCalcule = mensualiteCalculee * dureeMois;
+            
+            // Intérêts totaux = coût total - montant emprunté
+            const interetsTotalCalcule = coutTotalCalcule - montant;
+            
+            // Afficher les résultats
+            document.getElementById('mensualite').textContent = formatMontant(Math.round(mensualiteCalculee));
+            document.getElementById('cout-total').textContent = formatMontant(Math.round(coutTotalCalcule));
+            document.getElementById('interets-total').textContent = formatMontant(Math.round(interetsTotalCalcule));
+            
+            // Générer le tableau d'amortissement
+            genererTableauAmortissement(montant, tauxMensuel, mensualiteCalculee, dureeMois);
+        }
+
+        // Générer le tableau d'amortissement
+        function genererTableauAmortissement(capital, tauxMensuel, mensualite, nombrePaiements) {
+            const tableau = [];
+            let capitalRestant = capital;
+            const tbody = document.getElementById('amortissement-body');
+            
+            // Vider le tableau existant
+            tbody.innerHTML = '';
+            
+            for (let i = 1; i <= Math.min(nombrePaiements, 120); i++) {
+                const interets = capitalRestant * tauxMensuel;
+                const partCapital = mensualite - interets;
+                capitalRestant -= partCapital;
+                
+                if (i <= 12 || i % 12 === 0 || i === nombrePaiements) {
+                    const row = document.createElement('tr');
+                    
+                    const cellMois = document.createElement('td');
+                    cellMois.textContent = i;
+                    cellMois.style.textAlign = 'center';
+                    
+                    const cellMensualite = document.createElement('td');
+                    cellMensualite.textContent = formatMontant(Math.round(mensualite));
+                    
+                    const cellInterets = document.createElement('td');
+                    cellInterets.textContent = formatMontant(Math.round(interets));
+                    
+                    const cellCapital = document.createElement('td');
+                    cellCapital.textContent = formatMontant(Math.round(partCapital));
+                    
+                    const cellRestant = document.createElement('td');
+                    cellRestant.textContent = formatMontant(Math.round(Math.max(0, capitalRestant)));
+                    
+                    row.appendChild(cellMois);
+                    row.appendChild(cellMensualite);
+                    row.appendChild(cellInterets);
+                    row.appendChild(cellCapital);
+                    row.appendChild(cellRestant);
+                    
+                    tbody.appendChild(row);
+                }
+            }
+        }
+
+        // Initialiser les événements
+        document.addEventListener('DOMContentLoaded', function() {
+            // Calculer au chargement
+            calculerMensualite();
+            
+            // Gérer les événements de saisie
+            const inputs = ['montant', 'taux', 'duree'];
+            inputs.forEach(id => {
+                const input = document.getElementById(id);
+                
+                input.addEventListener('input', function(e) {
+                    let valeurNettoyee;
+                    if (id === 'duree') {
+                        valeurNettoyee = e.target.value.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '');
+                        const valeurNombre = valeurNettoyee ? parseInt(valeurNettoyee, 10) : 0;
+                        const valeurFinale = Math.min(Math.max(valeurNombre, 0), 30);
+                        e.target.value = valeurFinale.toString();
+                    } else {
+                        valeurNettoyee = e.target.value.replace(/[^\d,.]/g, '').replace(/^0+(?=\d)/, '');
+                        const valeurNombre = parseNombreAvecSeparateurs(valeurNettoyee);
+                        if (id === 'montant') {
+                            e.target.value = formatNombre(valeurNombre);
+                        } else {
+                            e.target.value = valeurNettoyee.replace('.', ',');
+                        }
+                    }
+                    calculerMensualite();
+                });
+            });
+            
+            // Gérer l'affichage du tableau d'amortissement
+            const toggleButton = document.getElementById('toggle-amortissement');
+            const amortissementContainer = document.getElementById('amortissement-container');
+            
+            toggleButton.addEventListener('click', function() {
+                const isHidden = amortissementContainer.style.display === 'none';
+                amortissementContainer.style.display = isHidden ? 'block' : 'none';
+                toggleButton.textContent = isHidden ? 'Masquer le tableau d\'amortissement' : 'Voir le tableau d\'amortissement';
+            });
+        });
+    </script>
+</body>
+</html>
